@@ -193,3 +193,69 @@ def update_item_mayhem_levels(items, to_level, quiet=False):
             not_possible_txt
             ))
 
+def update_item_anointments(items, anointment, quiet=False):
+    """
+    Given a list of `items`, update their anointment to `anointment`.  If
+    `quiet` is `True`, only errors will be printed.
+    """
+
+    if anointment is not None:
+        # Consider 'none' string as intention to remove anointment.
+        if anointment.lower() == 'none':
+            anointment = None
+        # Otherwise any part name should start with the slash char.
+        elif not anointment.startswith('/'):
+            print(' - NOTICE: Skipping anointment update because anointment part name "{}" is invalid. '
+                  'Valid part name must always start with the "/" character.'.format(anointment))
+            return
+
+    num_items = len(items)
+    if not quiet:
+        if num_items == 1:
+            plural = ''
+        else:
+            plural = 's'
+        if anointment is None:
+            update_action = 'not be anointed'
+        else:
+            update_action = 'be anointed with "{}"'.format(anointment)
+        print(' - Updating {} item{} to {}'.format(
+            num_items,
+            plural,
+            update_action,
+            ))
+
+    actually_updated = 0
+    not_possible = 0
+
+    for item in items:
+        if not item.can_be_anointed():
+            not_possible += 1
+        elif item.anointment != anointment:
+            item.anointment = anointment
+            actually_updated += 1
+
+    if not quiet:
+        remaining = num_items - actually_updated - not_possible
+        if actually_updated == 1:
+            updated_verb = 'was'
+        else:
+            updated_verb = 'were'
+        if remaining > 0:
+            if remaining == 1:
+                remaining_verb = 'was'
+            else:
+                remaining_verb = 'were'
+            remaining_txt = ' ({} {} already have that)'.format(remaining, remaining_verb)
+        else:
+            remaining_txt = ''
+        if not_possible > 0:
+            not_possible_txt = ' ({} cannot be anointed)'.format(not_possible)
+        else:
+            not_possible_txt = ''
+        print('   - {} {} updated{}{}'.format(
+            actually_updated,
+            updated_verb,
+            remaining_txt,
+            not_possible_txt
+            ))

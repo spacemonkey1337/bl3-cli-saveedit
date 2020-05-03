@@ -1207,6 +1207,25 @@ mayhem_invdata_types = set([
     ])
 mayhem_invdata_lower_types = set([t.lower() for t in mayhem_invdata_types])
 
+# Anointed parts
+anointment_prefix_list = [
+    '/Game/Gear/Weapons/_Shared/_Design/EndGameParts/',
+    '/Game/PatchDLC/Raid1/Gear/Anointed/',
+    '/Game/PatchDLC/Event2/Gear/Weapon/EndGameParts/',
+]
+
+# Manufacturers which cannot have anointed items
+# (basically it's a class mods and artifacts)
+not_anointed_manufacturers = [
+    '/Game/Gear/Manufacturers/_Design/ClassMod.ClassMod',
+    '/Game/Gear/Manufacturers/_Design/Eridian.Eridian',
+]
+
+# Item types
+weapon_item_prefix = '/Game/Gear/Weapons/'
+shield_item_prefix = '/Game/Gear/Shields/'
+grenade_mod_item_prefix = '/Game/Gear/GrenadeMods/'
+
 # Mission names
 #
 # For most missions, the following find statement will generate this list:

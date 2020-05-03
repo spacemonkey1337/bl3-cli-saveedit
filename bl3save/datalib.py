@@ -459,6 +459,13 @@ class BL3Serial(object):
         # turn right around and decrypt it again.  Alas.
         self.set_serial(new_serial)
 
+    def _ensure_parts_parsed(self):
+        if not self.parsed or not self.parts_parsed:
+            self._parse_serial()
+            if not self.can_parse or not self.can_parse_parts:
+                return False
+        return True
+
     @property
     def balance(self):
         """
@@ -565,10 +572,8 @@ class BL3Serial(object):
         the Mayhem level could not be parsed (due to being unable to parse the
         item parts)
         """
-        if not self.parsed or not self.parts_parsed:
-            self._parse_serial()
-            if not self.can_parse or not self.can_parse_parts:
-                return None
+        if not self._ensure_parts_parsed():
+            return None
         # Given the presence of item editors, there could possibly be more
         # than one Mayhem part present in a serial (though they don't seem
         # to stack at all, so doing so would be pointless).  We'll just
@@ -585,10 +590,8 @@ class BL3Serial(object):
         or `False` otherwise.  Will also return `False` if we're unable to
         parse parts for the item.
         """
-        if not self.parsed or not self.parts_parsed:
-            self._parse_serial()
-            if not self.can_parse or not self.can_parse_parts:
-                return False
+        if not self._ensure_parts_parsed():
+            return False
         return self._invdata.lower() in mayhem_invdata_lower_types
 
     @mayhem_level.setter
@@ -631,6 +634,97 @@ class BL3Serial(object):
 
         # return!
         return True
+
+    @property
+    def anointment(self):
+        """
+        Returns the current anointment of the item, with `None` signifying
+        that there is no anointment present or that the anointment could not
+        be parsed (due to being unable to parse the item parts)
+        """
+        if not self._ensure_parts_parsed():
+            return None
+        # Given the presence of item editors, there could possibly be more
+        # than one anointment present in a serial (though they don't seem
+        # to stack at all, so doing so would be pointless).  We'll just
+        # abort processing as soon as we find one, which I suspect is likely
+        # what the game does, too.
+        for part_name, part_idx in self._generic_parts:
+            if any(part_name.startswith(anointment_prefix) for anointment_prefix in anointment_prefix_list):
+                return part_name
+        return None
+
+    def can_be_anointed(self):
+        """
+        Returns `True` if this is an item type which can have an anointment,
+        or `False` otherwise.  Will also return `False` if we're unable to
+        parse parts for the item.
+        """
+        if not self._ensure_parts_parsed():
+            return False
+        return self._manufacturer not in not_anointed_manufacturers
+
+    @anointment.setter
+    def anointment(self, value):
+        """
+        Sets the given anointment on the item.  Returns `True` if we were
+        able to do so, or `False` if not.
+        """
+        # The call to `can_be_anointed` will parse the serial if possible,
+        # so we'll be all set.
+        if not self.can_be_anointed():
+            return False
+
+        # Don't forget to set this
+        self.changed_parts = True
+
+        # First grab a list of any non-anointment parts (should just be mayhem levels)
+        new_parts = []
+        for idx, (part_name, part_idx) in enumerate(self._generic_parts):
+            if part_name.lower() in mayhem_part_lower_to_lvl:
+                new_parts.append((part_name, part_idx))
+
+        # Now add our new one in
+        if value is not None:
+            new_mayhem_part = self.serial_db.get_part_index('InventoryGenericPartData', value)
+            if new_mayhem_part is None:
+                return False
+            else:
+                new_parts.append((value, new_mayhem_part))
+
+        # Assign our list of generic parts back
+        self._generic_parts = new_parts
+
+        # Re-serialize
+        self._deparse_serial()
+        self._update_superclass_serial()
+
+        # return!
+        return True
+
+    def is_weapon(self):
+        """
+        Returns `True` if this is a weapon item.
+        """
+        if not self._ensure_parts_parsed():
+            return False
+        return self._invdata.startswith(weapon_item_prefix)
+
+    def is_shield(self):
+        """
+        Returns `True` if this is a shield item.
+        """
+        if not self._ensure_parts_parsed():
+            return False
+        return self._invdata.startswith(shield_item_prefix)
+
+    def is_grenade_mod(self):
+        """
+        Returns `True` if this is a grenade mod item.
+        """
+        if not self._ensure_parts_parsed():
+            return False
+        return self._invdata.startswith(grenade_mod_item_prefix)
 
     def get_level_eng(self):
         """

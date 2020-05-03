@@ -117,6 +117,21 @@ def main():
             choices=range(bl3save.mayhem_max+1),
             help='Set all inventory items to the specified Mayhem level (0 to remove)')
 
+    parser.add_argument('--weapon-anointment',
+            dest='weapon_anointment',
+            type=str,
+            help='Set specified anointment for all weapons in the inventory')
+
+    parser.add_argument('--shield-anointment',
+            dest='shield_anointment',
+            type=str,
+            help='Set specified anointment for all shields in the inventory')
+
+    parser.add_argument('--grenade-mod-anointment',
+            dest='grenade_mod_anointment',
+            type=str,
+            help='Set specified anointment for all grenade mods in the inventory')
+
     parser.add_argument('--mayhem',
             type=int,
             choices=range(11),
@@ -254,6 +269,9 @@ def main():
         args.item_levels,
         args.unfinish_nvhm,
         args.item_mayhem_levels is not None,
+        args.weapon_anointment is not None,
+        args.shield_anointment is not None,
+        args.grenade_mod_anointment is not None,
         ])
 
     # Make changes
@@ -396,6 +414,30 @@ def main():
         if args.item_mayhem_levels is not None:
             cli_common.update_item_mayhem_levels(save.get_items(),
                     args.item_mayhem_levels,
+                    quiet=args.quiet,
+                    )
+
+        # Weapon Anointment
+        if args.weapon_anointment is not None:
+            cli_common.update_item_anointments(
+                    [item for item in save.get_items() if item.is_weapon()],
+                    args.weapon_anointment,
+                    quiet=args.quiet,
+                    )
+
+        # Shield Anointment
+        if args.shield_anointment is not None:
+            cli_common.update_item_anointments(
+                    [item for item in save.get_items() if item.is_shield()],
+                    args.shield_anointment,
+                    quiet=args.quiet,
+                    )
+
+        # Grenade Mod Anointment
+        if args.grenade_mod_anointment is not None:
+            cli_common.update_item_anointments(
+                    [item for item in save.get_items() if item.is_grenade_mod()],
+                    args.grenade_mod_anointment,
                     quiet=args.quiet,
                     )
 
