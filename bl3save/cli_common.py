@@ -22,6 +22,7 @@
 # 3. This notice may not be removed or altered from any source distribution.
 
 import argparse
+import configparser
 
 class DictAction(argparse.Action):
     """
@@ -96,6 +97,90 @@ def import_items(import_file, item_create_func, item_add_func, allow_fabricator=
                     else:
                         print('   + unknown item')
                 added_count += 1
+    if not quiet:
+        print('   - Added Item Count: {}'.format(added_count))
+
+def export_blueprints(items, export_file, quiet=False):
+    """
+    Exports the given `items` as blueprints to the given `export_file`.
+    If `quiet` is `False`, only errors will be printed.
+    """
+    blueprints = configparser.ConfigParser()
+
+    for index, item in enumerate(items, 1):
+        # if item.eng_name:
+        #     section = '#{} {}'.format(index, item.eng_name)
+        # else:
+        #     section = index
+
+        blueprint = item.get_blueprint(
+            include_name=True,
+            include_serial=True,
+            )
+
+        for attr in ('name', 'level', 'mayhem', 'anointment'):
+            if attr in blueprint:
+                blueprint[attr] = str(blueprint[attr])
+
+        for attr in ('parts', 'generics'):
+            if attr in blueprint:
+                blueprint[attr] = '\n'.join([''] + blueprint[attr])
+
+        blueprints[index] = blueprint
+
+        # blueprints[section] = {attr: '\n'.join([''] + value) if type(value) is list else str(value)
+        #                       for attr, value in item.get_blueprint(include_serial=True).items()}
+
+    with open(export_file, 'w') as df:
+        blueprints.write(df)
+
+    if not quiet:
+        print('Wrote {} items (in blueprint format) to {}'.format(len(items), export_file))
+
+def import_blueprints(import_file, item_create_func, item_add_func, quiet=False):
+    """
+    Imports items in blueprint format from `import_file`.
+    If `quiet` is `True`, only error/warning output will be shown.
+    """
+    if not quiet:
+        print(' - Importing items from {}'.format(import_file))
+    added_count = 0
+
+    blueprints = configparser.ConfigParser()
+    blueprints.read(import_file)
+
+    for section in blueprints.sections():
+        blueprint = dict(blueprints[section])
+
+        if 'level' in blueprint:
+            blueprint['level'] = int(blueprint['level'])
+
+        if 'mayhem' in blueprint:
+            blueprint['mayhem'] = int(blueprint['mayhem'])
+
+        if 'parts' in blueprint:
+            blueprint['parts'] = blueprint['parts'].strip().split('\n')
+
+        if 'generics' in blueprint:
+            blueprint['generics'] = blueprint['generics'].strip().split('\n')
+
+        if 'anointment' in blueprint and blueprint['anointment'] in ('', 'None'):
+            blueprint['anointment'] = None
+
+        new_item = item_create_func(blueprint)
+
+        if new_item is not None:
+            item_add_func(new_item)
+            if not quiet:
+                if new_item.eng_name:
+                    print('   + {} ({})'.format(new_item.eng_name, new_item.get_level_eng()))
+                else:
+                    print('   + unknown item')
+            added_count += 1
+        else:
+            if not quiet:
+                print('   - skipped item [{}] because blueprint is invalid'.format(section))
+
     if not quiet:
         print('   - Added Item Count: {}'.format(added_count))
 

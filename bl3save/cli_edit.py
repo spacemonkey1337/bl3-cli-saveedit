@@ -53,7 +53,7 @@ def main():
             )
 
     parser.add_argument('-o', '--output',
-            choices=['savegame', 'protobuf', 'json', 'items'],
+            choices=['savegame', 'protobuf', 'json', 'items', 'blueprints'],
             default='savegame',
             help='Output file format',
             )
@@ -179,7 +179,13 @@ def main():
     parser.add_argument('-i', '--import-items',
             dest='import_items',
             type=str,
-            help='Import items from file',
+            help='Import items from file in serial code format',
+            )
+
+    parser.add_argument('-ib', '--import-blueprints',
+            dest='import_blueprints',
+            type=str,
+            help='Import items from file in blueprint format',
             )
 
     parser.add_argument('--allow-fabricator',
@@ -265,6 +271,7 @@ def main():
         len(args.unlock) > 0,
         args.copy_nvhm,
         args.import_items,
+        args.import_blueprints,
         args.items_to_char,
         args.item_levels,
         args.unfinish_nvhm,
@@ -387,12 +394,20 @@ def main():
                     print('   - TVHM')
                 save.set_playthroughs_completed(1)
 
-        # Import Items
+        # Import Items in serial format
         if args.import_items:
             cli_common.import_items(args.import_items,
                     save.create_new_item_encoded,
                     save.add_item,
                     allow_fabricator=args.allow_fabricator,
+                    quiet=args.quiet,
+                    )
+
+        # Import Items in blueprint format
+        if args.import_blueprints:
+            cli_common.import_blueprints(args.import_blueprints,
+                    save.create_new_item_from_blueprint,
+                    save.add_item,
                     quiet=args.quiet,
                     )
 
@@ -472,6 +487,12 @@ def main():
             print('Wrote JSON to {}'.format(args.output_filename))
     elif args.output == 'items':
         cli_common.export_items(
+                save.get_items(),
+                args.output_filename,
+                quiet=args.quiet,
+                )
+    elif args.output == 'blueprints':
+        cli_common.export_blueprints(
                 save.get_items(),
                 args.output_filename,
                 quiet=args.quiet,

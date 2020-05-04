@@ -78,6 +78,28 @@ class BL3Item(datalib.BL3Serial):
                 weapon_skin_path=skin_path,
                 ), datawrapper)
 
+    @staticmethod
+    def create_from_blueprint(datawrapper, blueprint, pickup_order_idx, skin_path='', is_seen=True, is_favorite=False, is_trash=False):
+        """
+        Creates a new item from the blueprint data, pickup_order_idx, and skin_path.
+        """
+
+        base_serial = blueprint['serial'] if 'serial' in blueprint else 'BL3(AwAAAADnnIA5RhkBYWEajp8AEtycUi0MEBACAAAAAACQMQA=)'
+
+        new_item = BL3Item.create(datawrapper,
+                serial_number=datalib.BL3Serial.decode_serial_base64(base_serial),
+                pickup_order_idx=pickup_order_idx,
+                skin_path=skin_path,
+                is_seen=is_seen,
+                is_favorite=is_favorite,
+                is_trash=is_trash
+                )
+
+        if not new_item.apply_blueprint(blueprint):
+            return None
+
+        return new_item
+
     def get_pickup_order_idx(self):
         return self.protobuf.pickup_order_index
 
@@ -87,6 +109,142 @@ class BL3Item(datalib.BL3Serial):
         setting the serial back into the protobuf.
         """
         self.protobuf.item_serial_number = self.serial
+
+    def get_blueprint(self, include_name=False, include_serial=False, expand_generics=False):
+        """
+        Returns blueprint data for the item.
+        """
+        if not self._ensure_parts_parsed():
+            return None
+
+        blueprint = {}
+
+        if include_name:
+            blueprint.update({
+                'name': self._eng_name,
+            })
+
+        if include_serial:
+            blueprint.update({
+                'serial': self.get_serial_base64(),
+            })
+
+        blueprint.update({
+            'balance': self._balance,
+            'invdata': self._invdata,
+            'manufacturer': self._manufacturer,
+            'level': self.level,
+        })
+
+        if expand_generics:
+            blueprint.update({
+                'mayhem': self.mayhem_level,
+                'anointment': self.anointment,
+            })
+
+        blueprint.update({
+            'parts': [part_name for (part_name, part_idx) in self._parts],
+        })
+
+        if not expand_generics:
+            blueprint.update({
+                'generics': [part_name for (part_name, part_idx) in self._generic_parts],
+            })
+
+        return blueprint
+
+    def apply_blueprint(self, blueprint):
+        """
+        Applies blueprint data to the item.
+        """
+
+        if not self._ensure_parts_parsed():
+            return False
+
+        present_attrs = blueprint.keys() & \
+                        ('balance', 'invdata', 'manufacturer', 'level', 'mayhem', 'anointment', 'parts', 'generics')
+        blueprint = {attr: blueprint[attr] for attr in present_attrs}
+
+        # Resolve values if possible, otherwise break and return False.
+
+        if 'balance' in blueprint:
+            blueprint['balance_idx'] = self.serial_db.get_part_index('InventoryBalanceData', blueprint['balance'])
+            blueprint['part_invkey'] = self.invkey_db.get(blueprint['balance'])
+            if blueprint['balance_idx'] is None or blueprint['part_invkey'] is None:
+                return False
+        else:
+            blueprint['part_invkey'] = self._part_invkey
+
+        if 'invdata' in blueprint:
+            blueprint['invdata_idx'] = self.serial_db.get_part_index('InventoryData', blueprint['invdata'])
+            if blueprint['invdata_idx'] is None:
+                return False
+
+        if 'manufacturer' in blueprint:
+            blueprint['manufacturer_idx'] = self.serial_db.get_part_index('ManufacturerData', blueprint['manufacturer'])
+            if blueprint['manufacturer_idx'] is None:
+                return False
+
+        if 'parts' in blueprint:
+            blueprint['parts_with_idx'] = []
+            for part_name in blueprint['parts']:
+                part_idx = self.serial_db.get_part_index(blueprint['part_invkey'], part_name)
+                if part_idx is None:
+                    return False
+                blueprint['parts_with_idx'].append((part_name, part_idx))
+
+        if 'generics' in blueprint:
+            blueprint['generics_with_idx'] = []
+            for part_name in blueprint['generics']:
+                part_idx = self.serial_db.get_part_index('InventoryGenericPartData', part_name)
+                if part_idx is None:
+                    return False
+                blueprint['generics_with_idx'].append((part_name, part_idx))
+
+        # Apply all changes at once.
+
+        if 'part_invkey' in blueprint:
+            self._part_invkey = blueprint['part_invkey']
+
+        if 'balance_idx' in blueprint:
+            self._balance = blueprint['balance']
+            self._balance_idx = blueprint['balance_idx']
+            self.changed_parts = True
+
+        if 'invdata_idx' in blueprint:
+            self._invdata = blueprint['invdata']
+            self._invdata_idx = blueprint['invdata_idx']
+            self.changed_parts = True
+
+        if 'manufacturer_idx' in blueprint:
+            self._manufacturer = blueprint['manufacturer']
+            self._manufacturer_idx = blueprint['manufacturer_idx']
+            self.changed_parts = True
+
+        if 'parts_with_idx' in blueprint:
+            self._parts = blueprint['parts_with_idx']
+            self.changed_parts = True
+
+        if 'generics_with_idx' in blueprint:
+            self._generic_parts = blueprint['generics_with_idx']
+            self.changed_parts = True
+
+        if 'level' in blueprint:
+            self._level = blueprint['level']
+            self.changed_parts = True
+
+        # Re-serialize
+        if self.changed_parts:
+            self._deparse_serial()
+            self._update_superclass_serial()
+
+        if 'mayhem' in blueprint:
+            self.mayhem_level = blueprint['mayhem']
+
+        if 'anointment' in blueprint:
+            self.anointment = blueprint['anointment']
+
+        return True
 
 class BL3EquipSlot(object):
     """
@@ -977,6 +1135,17 @@ class BL3Save(object):
         self.items.append(new_item)
         return len(self.items)-1
 
+    def get_max_pickup_order(self):
+        """
+        Gets the max pickup_order_index attribute value among all items.
+        Currently used to create unique value for new items by incrementing.
+        """
+        max_pickup_order = 0
+        for item in self.items:
+            if item.get_pickup_order_idx() > max_pickup_order:
+                max_pickup_order = item.get_pickup_order_idx()
+        return max_pickup_order
+
     def create_new_item(self, item_serial):
         """
         Creates a new item from the given binary `item_serial`, which can later
@@ -987,10 +1156,7 @@ class BL3Save(object):
         # make sure it's unique anyway.  It might be related to ordering when picking
         # up multiple items at once, which would probably make it more useful for auto-pick-up
         # items like money and ammo...
-        max_pickup_order = 0
-        for item in self.items:
-            if item.get_pickup_order_idx() > max_pickup_order:
-                max_pickup_order = item.get_pickup_order_idx()
+        max_pickup_order = self.get_max_pickup_order()
 
         # Create the item and return it
         new_item = BL3Item.create(self.datawrapper,
@@ -1006,6 +1172,22 @@ class BL3Save(object):
         `item_serial_b64`, which can later be added to our item list.
         """
         return self.create_new_item(datalib.BL3Serial.decode_serial_base64(item_serial_b64))
+
+    def create_new_item_from_blueprint(self, item_blueprint):
+        """
+        Creates a new item from the blueprint data, which can later be added to our item list.
+        """
+
+        # See `create_new_item()` for comments
+        max_pickup_order = self.get_max_pickup_order()
+
+        # Create the item and return it
+        new_item = BL3Item.create_from_blueprint(self.datawrapper,
+                blueprint=item_blueprint,
+                pickup_order_idx=max_pickup_order+1,
+                is_favorite=True,
+                )
+        return new_item
 
     def add_new_item(self, item_serial):
         """
