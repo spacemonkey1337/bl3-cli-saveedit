@@ -817,6 +817,8 @@ class InventorySerialDB(object):
         Find the correct index to use for the given `part_name`, inside the given
         `category`.  Will return `None` if the part cannot be found.
         """
+        if not self.initialized:
+            self._initialize()
         if category not in self.part_cache:
             self.part_cache[category] = {}
         if part_name not in self.part_cache[category]:
