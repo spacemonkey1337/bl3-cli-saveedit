@@ -124,12 +124,9 @@ def export_blueprints(items, export_file, quiet=False):
 
         for attr in ('parts', 'generics'):
             if attr in blueprint:
-                blueprint[attr] = '\n'.join([''] + blueprint[attr])
+                blueprint[attr] = '\n'.join([''] + blueprint[attr]) if blueprint[attr] else ''
 
         blueprints[index] = blueprint
-
-        # blueprints[section] = {attr: '\n'.join([''] + value) if type(value) is list else str(value)
-        #                       for attr, value in item.get_blueprint(include_serial=True).items()}
 
     with open(export_file, 'w') as df:
         blueprints.write(df)
@@ -152,20 +149,20 @@ def import_blueprints(import_file, item_create_func, item_add_func, quiet=False)
     for section in blueprints.sections():
         blueprint = dict(blueprints[section])
 
-        if 'level' in blueprint:
-            blueprint['level'] = int(blueprint['level'])
+        # Integers
+        for attr in ('level', 'mayhem'):
+            if attr in blueprint:
+                blueprint[attr] = int(blueprint[attr])
 
-        if 'mayhem' in blueprint:
-            blueprint['mayhem'] = int(blueprint['mayhem'])
+        # Optional (nullables)
+        for attr in ['anointment']:
+            if attr in blueprint and blueprint[attr] in ('', 'None'):
+                blueprint[attr] = None
 
-        if 'parts' in blueprint:
-            blueprint['parts'] = blueprint['parts'].strip().split('\n')
-
-        if 'generics' in blueprint:
-            blueprint['generics'] = blueprint['generics'].strip().split('\n')
-
-        if 'anointment' in blueprint and blueprint['anointment'] in ('', 'None'):
-            blueprint['anointment'] = None
+        # Lists
+        for attr in ('parts', 'generics'):
+            if attr in blueprint:
+                blueprint[attr] = blueprint[attr].strip().split('\n') if blueprint[attr] else []
 
         new_item = item_create_func(blueprint)
 
